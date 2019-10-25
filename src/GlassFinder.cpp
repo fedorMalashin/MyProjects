@@ -3,9 +3,123 @@
 #include <opencv2/core.hpp>
 #define _USE_MATH_DEFINES
 #include <math.h>
+#include <algorithm>
 using namespace cv;
 
 //int AverageBrightness
+
+
+inline bool PointAboveAnotherPoint(const Point &aPoint, const Point &aAnotherPoint)
+{
+  return aPoint.y < aAnotherPoint.y;
+}
+
+inline bool PointLeftOnAnotherPoint(const Point &aPoint, const Point &aAnotherPoint)
+{
+  return aPoint.x < aAnotherPoint.x;
+}
+
+inline double LengthOfLine(const Vec4i &aLine)
+{
+  return sqrt((aLine[3] - aLine[1]) * (aLine[3] - aLine[1]) + (aLine[2] - aLine[0]) * (aLine[2] - aLine[0]));
+}
+
+inline double AngleofLine(const Vec4i &aLine)
+{
+  return atan2(aLine[3] - aLine[1], aLine[2] - aLine[0]);
+}
+
+Point IntersectionOf2Lines(const Vec4i& aFirst, const Vec4i& aSecond)
+{
+  double _k1 = static_cast<double>((aFirst[3] - aFirst[1])) / (aFirst[2] - aFirst[0]);
+  double _k2 = static_cast<double>((aSecond[3] - aSecond[1])) / (aSecond[2] - aSecond[0]);
+  double _b1 = aFirst[3] - _k1 * aFirst[2];
+  double _b2 = aSecond[3] - _k2 * aSecond[2];
+
+  return Point(static_cast<int>((_b2 - _b1) / (_k1 - _k2)), static_cast<int>((_k1 * _b2 - _k2 * _b1) / (_k1 - _k2)));
+}
+
+std::vector<Point> GetGlassPoints(const std::vector<Vec4i> &aLines)
+{
+  return std::vector<Point> {
+      IntersectionOf2Lines(aLines[0], aLines[2]),
+      IntersectionOf2Lines(aLines[0], aLines[3]),
+      IntersectionOf2Lines(aLines[1], aLines[2]),
+      IntersectionOf2Lines(aLines[1], aLines[3]),
+  };
+}
+
+std::vector<Vec4i> ExtrapolateLines(const std::vector<Vec4i> &aLines)
+{
+  std::vector<Vec4i> _extra_lines;
+  _extra_lines.reserve(aLines.size());
+
+  for (Vec4i _line : aLines)
+  {
+    double _angle = AngleofLine(_line);
+    double _a = cos(_angle);
+    double _b = sin(_angle);
+    double _x1 = int(_line[0] - 300 * _a);
+    double _y1 = int(_line[1] - 300 * _b);
+    double _x2 = int(_line[2] + 300 * _a);
+    double _y2 = int(_line[3] + 300 * _b);
+
+    _extra_lines.push_back(Vec4i(static_cast<int>(_x1), static_cast<int>(_y1), static_cast<int>(_x2), static_cast<int>(_y2)));
+  }
+  return _extra_lines;
+}
+
+std::vector<Vec4i> FilterLinesByAngleLengthAndLocation(std::vector<Vec4i> &aLines, const Point &aCenter)
+{
+  std::vector<Vec4i> _hor;
+  std::vector<Vec4i> _ver;
+
+  for (int i = 0; i < aLines.size(); ++i)
+    if (-1 < abs(AngleofLine(aLines[i])) && abs(AngleofLine(aLines[i])) < 1)
+      _hor.push_back(aLines[i]);
+    else
+      _ver.push_back(aLines[i]);
+
+  std::vector<Vec4i> _hor_below_center;
+  std::vector<Vec4i> _hor_above_center;
+
+  std::vector<Vec4i> _hor_left_on_center;
+  std::vector<Vec4i> _hor_right_on_center;;
+
+  for (int i = 0; i < _hor.size(); ++i)
+    if (PointAboveAnotherPoint(Point(_hor[i][0], _hor[i][1]), aCenter) && PointAboveAnotherPoint(Point(_hor[i][2], _hor[i][3]), aCenter))
+      _hor_above_center.push_back(_hor[i]);
+    else
+      _hor_below_center.push_back(_hor[i]);
+
+  for (int i = 0; i < _ver.size(); ++i)
+    if (PointLeftOnAnotherPoint(Point(_ver[i][0], _ver[i][1]), aCenter) && PointLeftOnAnotherPoint(Point(_ver[i][2], _ver[i][3]), aCenter))
+      _hor_left_on_center.push_back(_ver[i]);
+    else
+      _hor_right_on_center.push_back(_ver[i]);
+
+
+  std::sort(_hor_above_center.begin(), _hor_above_center.end(), [](const Vec4i &a, const Vec4i &b) {
+    return (LengthOfLine(a) > LengthOfLine(b));
+  });
+
+  std::sort(_hor_below_center.begin(), _hor_below_center.end(), [](const Vec4i &a, const Vec4i &b) {
+    return (LengthOfLine(a) > LengthOfLine(b));
+  });
+
+  std::sort(_hor_left_on_center.begin(), _hor_left_on_center.end(), [](const Vec4i &a, const Vec4i &b) {
+    return (LengthOfLine(a) > LengthOfLine(b));
+  });
+
+  std::sort(_hor_right_on_center.begin(), _hor_right_on_center.end(), [](const Vec4i &a, const Vec4i &b) {
+    return (LengthOfLine(a) > LengthOfLine(b));
+  });
+
+  if (_hor_above_center.empty() || _hor_below_center.empty() || _hor_left_on_center.empty() || _hor_right_on_center.empty())
+    return std::vector<Vec4i>{};
+  else
+    return std::vector<Vec4i>{_hor_above_center[0], _hor_below_center[0], _hor_left_on_center[0], _hor_right_on_center[0]};
+}
 
 Point FindFirstBrightestPoint(const Mat &aImage, const Vec4i &aLine)
 {
@@ -261,16 +375,12 @@ Mat DrawLinesPoints(Mat &aSrc, std::vector<Point> &aPoints)
     line(aSrc, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0, 0, 255), 1, LINE_AA);
   }
 
-
-
   return aSrc;
 }
 
 Mat DrawLinesRect(Mat &aSrc, std::vector<Rect> &aRects)
 {
-  Mat _dst;
-
-  _dst = aSrc;
+  Mat _dst = aSrc;
 
   _dst.setTo(0);
 
@@ -307,14 +417,38 @@ Mat DrawLinesRect(Mat &aSrc, std::vector<Rect> &aRects)
   std::vector<Vec4i> linesP; // will hold the results of the detection
   HoughLinesP(_dis, linesP, 3, 0.01, 100, 100, 100); // runs the actual detection
 
-  // Draw the lines
-  for (size_t i = 0; i < linesP.size(); i++)
+  Mat _binary_lines = Mat(aSrc.rows, aSrc.cols, CV_8UC1);
+  _binary_lines.setTo(0);
+
+  Mat _clear_image = aSrc;
+  _clear_image.setTo(0);
+
+  RNG _rng(12345);
+
+
+  std::vector<Vec4i> _lines = FilterLinesByAngleLengthAndLocation(linesP, Point(1034, 873));
+
+  Mat _image = imread("d:\\Dev\\RoboLine\\CameraCalibrationVSSolution\\x64\\Debug\\001.bmp");
+
+  _lines = ExtrapolateLines(_lines);
+
+  std::vector<Point> _glass_points = GetGlassPoints(_lines);
+
+  for (Point el : _glass_points)
   {
-    Vec4i l = linesP[i];
-    line(aSrc, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0, 255, 0), 1, LINE_AA);
+    Rect _rect = Rect(el, Size(2, 2));
+    rectangle(_image, _rect, Scalar(7, 7, 247));
   }
 
-  return aSrc;
+  // Draw the lines
+  for (size_t i = 0; i < _lines.size(); i++)
+  {
+    Vec4i l = _lines[i];
+    Scalar _color = Scalar(_rng.uniform(0, 255), _rng.uniform(0, 255), _rng.uniform(0, 255));
+    line(_image, Point(l[0], l[1]), Point(l[2], l[3]), _color, 2, LINE_AA);
+  }
+
+  return _image;
 }
 
 
