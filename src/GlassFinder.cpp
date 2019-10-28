@@ -6,7 +6,7 @@
 #include <algorithm>
 using namespace cv;
 
-//int AverageBrightness
+//int AverageBrightness(const LineIterator &aIterator)
 
 
 inline bool PointAboveAnotherPoint(const Point &aPoint, const Point &aAnotherPoint)
@@ -128,7 +128,7 @@ Point FindFirstBrightestPoint(const Mat &aImage, const Vec4i &aLine)
   Point _ret_point = Point(0, 0);
 
   int _channels = aImage.channels();
-  int _bright_shift = 2;
+  int _bright_shift = 0;
 
   for (int i = 0; i < _iterator.count; ++i, _iterator++)
   {
@@ -140,7 +140,7 @@ Point FindFirstBrightestPoint(const Mat &aImage, const Vec4i &aLine)
       _ret_point.y = _iterator.pos().y;
 
       _iterator++;
-      for (int j = i + 1; i < _iterator.count; ++j, _iterator++)
+      for (int j = i + 1; i < 5; ++j, _iterator++)
       {
         int _new_brightness = aImage.at<Vec3b>(_iterator.pos())[0];
         if (_new_brightness >= _brightness - _bright_shift)
@@ -364,10 +364,6 @@ Mat DrawLinesPoints(Mat &aSrc, std::vector<Point> &aPoints)
   std::vector<Vec3d> linesP; // will hold the results of the detection
   //HoughLinesP(_dis, linesP, 15, 0.5, 100, 50, 150); // runs the actual detection
 
-  Mat lines;
-  HoughLinesPointSet(_fpoints, lines, _fpoints.size(), 1, rhoMin, rhoMax, rhoStep,
-    thetaMin, thetaMax, thetaStep);
-
   // Draw the lines
   for (size_t i = 0; i < linesP.size(); i++)
   {
@@ -398,11 +394,7 @@ Mat DrawLinesRect(Mat &aSrc, std::vector<Rect> &aRects)
   for (Rect element : aRects)
     rectangle(_dis, element, Scalar(7, 7, 247));
 
-  namedWindow("Vector image", WINDOW_FREERATIO);
-  imshow("Vector image", _dis);
-  waitKey(0);
-
-  Canny(_dis, _dis, 50, 200, 3);
+  Canny(_dis, _dis, 50, 160, 3);
 
   //Mat _corners, _dilated_corners;
   //preCornerDetect(_dis, _corners, 3);
@@ -415,7 +407,7 @@ Mat DrawLinesRect(Mat &aSrc, std::vector<Rect> &aRects)
 
   // Probabilistic Line Transform
   std::vector<Vec4i> linesP; // will hold the results of the detection
-  HoughLinesP(_dis, linesP, 3, 0.01, 100, 100, 100); // runs the actual detection
+  HoughLinesP(_dis, linesP, 7, 0.009, 100, 100, 100); // runs the actual detection
 
   Mat _binary_lines = Mat(aSrc.rows, aSrc.cols, CV_8UC1);
   _binary_lines.setTo(0);
@@ -445,8 +437,16 @@ Mat DrawLinesRect(Mat &aSrc, std::vector<Rect> &aRects)
   {
     Vec4i l = _lines[i];
     Scalar _color = Scalar(_rng.uniform(0, 255), _rng.uniform(0, 255), _rng.uniform(0, 255));
-    line(_image, Point(l[0], l[1]), Point(l[2], l[3]), _color, 2, LINE_AA);
+    line(_image, Point(l[0], l[1]), Point(l[2], l[3]), _color, 1, LINE_AA);
   }
+
+  //// Draw the lines
+  //for (size_t i = 0; i < linesP.size(); i++)
+  //{
+  //  Vec4i l = linesP[i];
+  //  Scalar _color = Scalar(_rng.uniform(0, 255), _rng.uniform(0, 255), _rng.uniform(0, 255));
+  //  line(_image, Point(l[0], l[1]), Point(l[2], l[3]), _color, 1, LINE_AA);
+  //}
 
   return _image;
 }
@@ -457,7 +457,7 @@ int main()
   Mat _image = imread("d:\\Dev\\RoboLine\\CameraCalibrationVSSolution\\x64\\Debug\\001.bmp");
   Mat _vector_image = CreateVector(_image);
 
-  medianBlur(_vector_image, _vector_image, 3);
+  medianBlur(_vector_image, _vector_image, 5);
   //GaussianBlur(_vector_image, _vector_image, Size(7,7), 2.0);
 
   namedWindow("Vector image", WINDOW_FREERATIO);
